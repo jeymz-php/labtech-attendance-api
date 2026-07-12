@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AttendanceLog;
+use App\Models\OfficeSetting;
 use App\Models\Staff;
+use App\Models\StaffSchedule;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class AttendanceController extends Controller
 {
-    private const LATE_CUTOFF = '09:00:00';
     private const TIMEZONE = 'Asia/Manila';
 
     public function kioskTimeIn(Request $request)
@@ -28,6 +30,12 @@ class AttendanceController extends Controller
         }
 
         $now = Carbon::now(self::TIMEZONE);
+
+        $blockReason = $this->checkAttendanceAllowed($staff, $now);
+        if ($blockReason) {
+            return response()->json(['message' => $blockReason], 403);
+        }
+
         $today = $now->copy()->startOfDay();
 
         $existing = AttendanceLog::where('staff_id', $staff->id)
@@ -38,7 +46,7 @@ class AttendanceController extends Controller
             return response()->json(['message' => "{$staff->full_name} already timed in today."], 409);
         }
 
-        $status = $now->format('H:i:s') > self::LATE_CUTOFF ? 'late' : 'on_time';
+        $status = $this->determineStatus($staff, $now);
 
         $log = AttendanceLog::updateOrCreate(
             ['staff_id' => $staff->id, 'log_date' => $today],
@@ -65,6 +73,12 @@ class AttendanceController extends Controller
         }
 
         $now = Carbon::now(self::TIMEZONE);
+
+        $blockReason = $this->checkAttendanceAllowed($staff, $now);
+        if ($blockReason) {
+            return response()->json(['message' => $blockReason], 403);
+        }
+
         $today = $now->copy()->startOfDay();
 
         $log = AttendanceLog::where('staff_id', $staff->id)
@@ -126,12 +140,102 @@ class AttendanceController extends Controller
 
     public function history(Request $request)
     {
-        $logs = AttendanceLog::where('staff_id', $request->user()->id)
-            ->orderByDesc('log_date')
-            ->limit(30)
-            ->get();
+        $query = AttendanceLog::where('staff_id', $request->user()->id)->orderByDesc('log_date');
+
+        if ($request->filled('from')) {
+            $query->whereDate('log_date', '>=', $request->from);
+        }
+
+        if ($request->filled('to')) {
+            $query->whereDate('log_date', '<=', $request->to);
+        }
+
+        $logs = $query->limit(200)->get()->map(function ($log) {
+            return [
+                'log_date' => $log->log_date->format('Y-m-d'),
+                'time_in' => $log->time_in ? $log->time_in->timezone(self::TIMEZONE)->format('h:i A') : null,
+                'time_out' => $log->time_out ? $log->time_out->timezone(self::TIMEZONE)->format('h:i A') : null,
+                'status' => $log->status,
+            ];
+        });
 
         return response()->json(['logs' => $logs]);
+    }
+
+    public function reportPdf(Request $request)
+    {
+        $staff = $request->user();
+
+        $query = AttendanceLog::where('staff_id', $staff->id)->orderByDesc('log_date');
+
+        if ($request->filled('from')) {
+            $query->whereDate('log_date', '>=', $request->from);
+        }
+
+        if ($request->filled('to')) {
+            $query->whereDate('log_date', '<=', $request->to);
+        }
+
+        $logs = $query->get();
+
+        $pdf = Pdf::loadView('pdf.attendance-report', [
+            'staff' => $staff,
+            'logs' => $logs,
+            'generatedAt' => Carbon::now(self::TIMEZONE),
+            'timezone' => self::TIMEZONE,
+        ]);
+
+        return $pdf->download('attendance-report-' . $staff->staff_id . '.pdf');
+    }
+
+    private function determineStatus(Staff $staff, Carbon $now): string
+    {
+        $settings = OfficeSetting::firstOrCreate([]);
+        $dayOfWeek = (int) $now->format('w');
+
+        $schedule = StaffSchedule::where('staff_id', $staff->id)
+            ->where('day_of_week', $dayOfWeek)
+            ->first();
+
+        $baselineTime = ($schedule && $schedule->is_duty && $schedule->start_time)
+            ? $schedule->start_time
+            : $settings->open_time;
+
+        $baseline = Carbon::parse($now->format('Y-m-d') . ' ' . $baselineTime, self::TIMEZONE);
+        $lateCutoff = $baseline->copy()->addMinutes($settings->late_grace_minutes);
+
+        return $now->greaterThan($lateCutoff) ? 'late' : 'on_time';
+    }
+
+    private function checkAttendanceAllowed(Staff $staff, Carbon $now): ?string
+    {
+        $settings = OfficeSetting::firstOrCreate([]);
+
+        if ($settings->mode === 'force_closed') {
+            return 'Attendance is currently closed by the LabTech Office.';
+        }
+
+        if ($settings->mode === 'normal') {
+            $current = $now->format('H:i:s');
+
+            if ($current < $settings->open_time || $current > $settings->close_time) {
+                $openLabel = Carbon::parse($settings->open_time)->format('h:i A');
+                $closeLabel = Carbon::parse($settings->close_time)->format('h:i A');
+                return "Attendance is only allowed between {$openLabel} and {$closeLabel}.";
+            }
+        }
+
+        $dayOfWeek = (int) $now->format('w');
+
+        $schedule = StaffSchedule::where('staff_id', $staff->id)
+            ->where('day_of_week', $dayOfWeek)
+            ->first();
+
+        if (! $schedule || ! $schedule->is_duty) {
+            return "{$staff->full_name} is off duty today.";
+        }
+
+        return null;
     }
 
     private function findStaff(string $identifier): ?Staff

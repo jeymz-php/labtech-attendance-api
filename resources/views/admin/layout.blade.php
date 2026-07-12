@@ -182,8 +182,12 @@
             <i class="ti ti-users"></i> Staff accounts
         </a>
 
+        <a href="{{ route('admin.office-hours.edit') }}" class="sidebar-link {{ request()->routeIs('admin.office-hours.*') ? 'active' : '' }}">
+            <i class="ti ti-clock"></i> Office hours
+        </a>
+
         <div class="sidebar-section-label">Coming soon</div>
-        <span class="sidebar-link disabled"><i class="ti ti-clock"></i> Attendance logs</span>
+        <span class="sidebar-link disabled"><i class="ti ti-clock-hour-4"></i> Attendance logs</span>
         <span class="sidebar-link disabled"><i class="ti ti-chart-bar"></i> Reports</span>
         <span class="sidebar-link disabled"><i class="ti ti-settings"></i> System settings</span>
 

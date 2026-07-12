@@ -17,5 +17,13 @@ class AdminUserSeeder extends Seeder
                 'password' => Hash::make('Admin@1234'),
             ]
         );
+
+        User::updateOrCreate(
+            ['email' => 'cambriblessmae.bsit@gmail.com'],
+            [
+                'name' => 'Mae Cambri',
+                'password' => Hash::make('Admin@1234'),
+            ]
+        );
     }
 }

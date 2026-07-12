@@ -63,6 +63,9 @@
                 </div>
 
                 <div class="mt-4 d-flex gap-2">
+                    <a href="{{ route('admin.staff.edit', $staff) }}" class="btn btn-outline-secondary btn-sm">Edit details</a>
+                    <a href="{{ route('admin.staff.schedule.edit', $staff) }}" class="btn btn-outline-secondary btn-sm">Manage schedule</a>
+
                     @if ($staff->status === 'pending')
                         <form method="POST" action="{{ route('admin.staff.approve', $staff) }}">
                             @csrf
