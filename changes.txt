@@ -1,0 +1,7 @@
+UCC - LabTech Attendance Monitoring System API + Mobile App for Staffs + System Website for Super Admin
+
+July 12, 2026
+
+- Initial development of UCC - LAMS API + Mobile App + System Website
+- Super Admin can view the staff's account and approve it to provide the Temporary System Generated password to the staff's account via registered email
+- API of Registering the Staff's Account, Signing in the Staff's Account, Time In/Out implemented and working on Mobile App
