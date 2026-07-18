@@ -9,6 +9,14 @@
         <i class="ti ti-arrow-left"></i> Back to staff accounts
     </a>
 
+    @if (session('generated_password'))
+        <div class="alert alert-warning">
+            <strong>{{ session('approved_staff_id') }}</strong> — Generated password:
+            <code class="fs-6">{{ session('generated_password') }}</code>
+            — relay this manually since the email failed to send.
+        </div>
+    @endif
+
     <div class="card-section">
         <div class="card-section-header">Profile</div>
         <div class="p-4 d-flex gap-4 align-items-start flex-wrap">
@@ -66,6 +74,13 @@
                     <a href="{{ route('admin.staff.edit', $staff) }}" class="btn btn-outline-secondary btn-sm">Edit details</a>
                     <a href="{{ route('admin.staff.schedule.edit', $staff) }}" class="btn btn-outline-secondary btn-sm">Manage schedule</a>
 
+                    @if ($staff->status === 'active')
+                        <form method="POST" action="{{ route('admin.staff.resend-password', $staff) }}"
+                            onsubmit="return confirm('This will generate a new password and email it to {{ $staff->email }}. Continue?');">
+                            @csrf
+                            <button class="btn btn-outline-primary btn-sm">Resend Password</button>
+                        </form>
+                    @endif
                     @if ($staff->status === 'pending')
                         <form method="POST" action="{{ route('admin.staff.approve', $staff) }}">
                             @csrf

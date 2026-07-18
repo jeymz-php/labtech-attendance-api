@@ -116,4 +116,28 @@ class StaffController extends Controller
 
         return redirect()->route('admin.staff.index')->with('success', "{$staff->full_name} reactivated.");
     }
+
+    public function resendPassword(Staff $staff)
+    {
+        $generatedPassword = Str::password(10, symbols: false);
+
+        $staff->update([
+            'password' => Hash::make($generatedPassword),
+        ]);
+
+        try {
+            Mail::to($staff->email)->send(new StaffApprovedMail($staff, $generatedPassword));
+
+            return redirect()
+                ->route('admin.staff.show', $staff)
+                ->with('success', "New password sent to {$staff->email}.");
+
+        } catch (\Exception $e) {
+            return redirect()
+                ->route('admin.staff.show', $staff)
+                ->with('generated_password', $generatedPassword)
+                ->with('approved_staff_id', $staff->staff_id)
+                ->with('success', "Password regenerated, but the email failed to send. See the password below.");
+        }
+    }
 }
